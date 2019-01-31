@@ -1,130 +1,165 @@
 package test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.List;
 
-import org.javatuples.Pair;
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.junit.Assert.*;
+import static java.util.Arrays.asList;
+import static nl.knaw.huc.di.tag.TAGAssertions.assertThat;
+import static nl.knaw.huc.di.tag.treediff.TreeDiffer.computeDiff;
+import static nl.knaw.huc.di.tag.treediff.TreeDiffer.produceHumanFriendlyMapping;
+import static org.junit.Assert.assertEquals;
 
 import util.*;
 import diff.*;
 
-public class TestTreeDiff {
-	Tree tree_one, tree_two, tree_three, tree_four;
-	
+public class TreeDifferTest {
+	private Tree treeOne;
+	private Tree treeTwo;
+	private Tree treeThree;
+	private Tree treeFour;
+
 	@Before
 	public void setUp() {
 		TreeNode a = new TreeNode("A");
 		TreeNode b = new TreeNode("B");
-		a.add_child(b);
+		a.addChild(b);
 		TreeNode d = new TreeNode("D");
-		b.add_child(d);
-		tree_one = new Tree(a);
-		tree_one.build_caches();
+		b.addChild(d);
+		treeOne = new Tree(a);
+		treeOne.buildCaches();
 
 		a = new TreeNode("A");
 		b = new TreeNode("B");
 		TreeNode c = new TreeNode("C");
 		d = new TreeNode("D");
-		a.add_child(b);
-		a.add_child(c);
-		c.add_child(d);
-		tree_two = new Tree(a);
-		tree_two.build_caches();
+		a.addChild(b);
+		a.addChild(c);
+		c.addChild(d);
+		treeTwo = new Tree(a);
+		treeTwo.buildCaches();
 
 		a = new TreeNode("A");
 		b = new TreeNode("B");
 		c = new TreeNode("C");
 		d = new TreeNode("D");
 		TreeNode e = new TreeNode("E");
-		a.add_child(b);
-		a.add_child(c);
-		c.add_child(d);
-		d.add_child(e);
-		tree_three = new Tree(a);
-		tree_three.build_caches();
-		
+		a.addChild(b);
+		a.addChild(c);
+		c.addChild(d);
+		d.addChild(e);
+		treeThree = new Tree(a);
+		treeThree.buildCaches();
+
 		a = new TreeNode("A");
 		b = new TreeNode("B");
 		c = new TreeNode("CC");
 		d = new TreeNode("D");
 		e = new TreeNode("E");
-		a.add_child(b);
-		a.add_child(c);
-		c.add_child(d);
-		d.add_child(e);
-		tree_four = new Tree(a);
-		tree_four.build_caches();
+		a.addChild(b);
+		a.addChild(c);
+		c.addChild(d);
+		d.addChild(e);
+		treeFour = new Tree(a);
+		treeFour.buildCaches();
 	}
 
 	@Test
-	public void testDistance() {
-		assertEquals(2,(int)TreeDiff.computeDiff(tree_one, tree_two).getValue0());
-		assertEquals(3,(int)TreeDiff.computeDiff(tree_one, tree_three).getValue0());
-		assertEquals(1,(int)TreeDiff.computeDiff(tree_two, tree_three).getValue0());
-		assertEquals(1,(int)TreeDiff.computeDiff(tree_three, tree_four).getValue0());
-		assertEquals(0,(int)TreeDiff.computeDiff(tree_two, tree_two).getValue0());
-	}
-	
-	@Test
-	public void testMapping() {
-		ArrayList<Pair<Object, Object>> mapping = (ArrayList<Pair<Object, Object>>)TreeDiff.computeDiff(tree_one, tree_two).getValue1();
-		String expectedMapping = "[[1, 1], [2, 3], [3, 4], [alpha, 2]]";
+	public void testTreeDiff12() {
+		final TreeMapping diff = computeDiff(treeOne, treeTwo);
+		Integer distance = diff.cost;
+		assertThat(distance).isEqualTo(2);
+
+		Mapping mapping = diff.mapping;
+		String expectedMapping = "[(1,1), (2,3), (3,4), (null,2)]";
 		assertEquals(expectedMapping, mapping.toString());
-		
-		mapping = (ArrayList<Pair<Object, Object>>)TreeDiff.computeDiff(tree_one, tree_three).getValue1();
-		expectedMapping = "[[1, 1], [2, 3], [3, 4], [alpha, 2], [alpha, 5]]";
-		assertEquals(expectedMapping, mapping.toString());
-		
-		mapping = (ArrayList<Pair<Object, Object>>)TreeDiff.computeDiff(tree_two, tree_three).getValue1();
-		expectedMapping = "[[1, 1], [2, 2], [3, 3], [4, 4], [alpha, 5]]";
-		assertEquals(expectedMapping, mapping.toString());
-		
-		mapping = (ArrayList<Pair<Object, Object>>)TreeDiff.computeDiff(tree_three, tree_four).getValue1();
-		expectedMapping = "[[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]";
-		assertEquals(expectedMapping, mapping.toString());
-		
-		mapping = (ArrayList<Pair<Object, Object>>)TreeDiff.computeDiff(tree_two, tree_two).getValue1();
-		expectedMapping = "[[1, 1], [2, 2], [3, 3], [4, 4]]";
-		assertEquals(expectedMapping, mapping.toString());	
+
+		List<String> description = produceHumanFriendlyMapping(mapping, treeOne, treeTwo);
+		List<String> expected = new ArrayList<>(asList(
+				"No change for A (@1 and @1)",
+				"Change from B (@2) to C (@3)",
+				"No change for D (@3 and @4)",
+				"Insert B (@2)"));
+		assertEquals(expected, description);
 	}
 
 	@Test
-	public void testProduceHumanFriendlyMapping() {
-		ArrayList<Pair<Object, Object>> mapping = (ArrayList<Pair<Object, Object>>)TreeDiff.computeDiff(tree_one, tree_two).getValue1();
-		ArrayList<String> description = TreeDiff.produceHumanFriendlyMapping(mapping, tree_one, tree_two);
-		ArrayList<String> expected = new ArrayList<>(Arrays.asList("No change for A (@1 and @1)",
-		        "Change from B (@2) to C (@3)", "No change for D (@3 and @4)", "Insert B (@2)"));
+	public void testTreeDiff13() {
+		final TreeMapping diff = computeDiff(treeOne, treeThree);
+		Integer distance = diff.cost;
+		assertThat(distance).isEqualTo(3);
+
+		final Mapping mapping = diff.mapping;
+		final String expectedMapping = "[(1,1), (2,3), (3,4), (null,2), (null,5)]";
+		assertEquals(expectedMapping, mapping.toString());
+
+		final List<String> description = produceHumanFriendlyMapping(mapping, treeOne, treeThree);
+		final List<String> expected = new ArrayList<>(asList(
+				"No change for A (@1 and @1)",
+				"Change from B (@2) to C (@3)",
+				"No change for D (@3 and @4)",
+				"Insert B (@2)",
+				"Insert E (@5)"));
 		assertEquals(expected, description);
-		
-		mapping = (ArrayList<Pair<Object, Object>>)TreeDiff.computeDiff(tree_one, tree_three).getValue1();
-		description = TreeDiff.produceHumanFriendlyMapping(mapping, tree_one, tree_three);
-		expected = new ArrayList<>(Arrays.asList("No change for A (@1 and @1)",
-		        "Change from B (@2) to C (@3)", "No change for D (@3 and @4)", "Insert B (@2)', 'Insert E (@5)"));
-		assertEquals(expected, description);
-		
-		mapping = (ArrayList<Pair<Object, Object>>)TreeDiff.computeDiff(tree_two, tree_three).getValue1();
-		description = TreeDiff.produceHumanFriendlyMapping(mapping, tree_two, tree_three);
-		expected = new ArrayList<>(Arrays.asList("No change for A (@1 and @1)", "No change for B (@2 and @2)",
-		        "No change for C (@3 and @3)", "No change for D (@4 and @4)", "Insert E (@5)"));
-		assertEquals(expected, description);
-		
-		mapping = (ArrayList<Pair<Object, Object>>)TreeDiff.computeDiff(tree_three, tree_four).getValue1();
-		description = TreeDiff.produceHumanFriendlyMapping(mapping, tree_three, tree_four);
-		expected = new ArrayList<>(Arrays.asList("No change for A (@1 and @1)", "No change for B (@2 and @2)",
-		        "Change from C (@3) to CC (@3)", "No change for D (@4 and @4)","No change for E (@5 and @5)"));
-		assertEquals(expected, description);
-		
-		mapping = (ArrayList<Pair<Object, Object>>)TreeDiff.computeDiff(tree_two, tree_two).getValue1();
-		description = TreeDiff.produceHumanFriendlyMapping(mapping, tree_two, tree_two);
-		expected = new ArrayList<>(Arrays.asList("No change for A (@1 and @1)", "No change for B (@2 and @2)",
-		        "No change for C (@3 and @3)", "No change for D (@4 and @4)"));
-		assertEquals(expected, description);
-		
-		
 	}
-	
+
+	@Test
+	public void testTreeDiff23() {
+		TreeMapping diff = computeDiff(treeTwo, treeThree);
+		assertThat(diff.cost).isEqualTo(1);
+
+		final Mapping mapping = diff.mapping;
+		final String expectedMapping = "[(1,1), (2,2), (3,3), (4,4), (null,5)]";
+		assertEquals(expectedMapping, mapping.toString());
+
+		final List<String> description = produceHumanFriendlyMapping(mapping, treeTwo, treeThree);
+		final List<String> expected = new ArrayList<>(asList(
+				"No change for A (@1 and @1)",
+				"No change for B (@2 and @2)",
+				"No change for C (@3 and @3)",
+				"No change for D (@4 and @4)",
+				"Insert E (@5)"));
+		assertEquals(expected, description);
+	}
+
+	@Test
+	public void testTreeDiff34() {
+		TreeMapping diff = computeDiff(treeThree, treeFour);
+		Integer distance = diff.cost;
+		assertThat(distance).isEqualTo(1);
+
+		final Mapping mapping = diff.mapping;
+		final String expectedMapping = "[(1,1), (2,2), (3,3), (4,4), (5,5)]";
+		assertEquals(expectedMapping, mapping.toString());
+
+		final List<String> description = produceHumanFriendlyMapping(mapping, treeThree, treeFour);
+		final List<String> expected = new ArrayList<>(asList(
+				"No change for A (@1 and @1)",
+				"No change for B (@2 and @2)",
+				"Change from C (@3) to CC (@3)",
+				"No change for D (@4 and @4)",
+				"No change for E (@5 and @5)"));
+		assertEquals(expected, description);
+	}
+
+	@Test
+	public void testTreeDiff22() {
+		TreeMapping diff = computeDiff(treeTwo, treeTwo);
+		Integer distance = diff.cost;
+		assertThat(distance).isEqualTo(0);
+
+		final Mapping mapping = diff.mapping;
+		final String expectedMapping = "[(1,1), (2,2), (3,3), (4,4)]";
+		assertEquals(expectedMapping, mapping.toString());
+
+		final List<String> description = produceHumanFriendlyMapping(mapping, treeTwo, treeTwo);
+		final List<String> expected = new ArrayList<>(asList(
+				"No change for A (@1 and @1)",
+				"No change for B (@2 and @2)",
+				"No change for C (@3 and @3)",
+				"No change for D (@4 and @4)"));
+		assertEquals(expected, description);
+	}
 }

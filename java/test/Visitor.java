@@ -6,13 +6,13 @@ import java.util.List;
 import util.*;
 
 public class Visitor implements util.Visitor {
-	List<String> traversal;
+	final List<String> traversal;
 
 	/*
 	 * Builds an array of node labels it visits
 	 */
 	public Visitor() {
-		traversal = new ArrayList<String>();
+		traversal = new ArrayList<>();
 	}
 
 	/*

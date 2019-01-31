@@ -1,16 +1,12 @@
 package diff;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 
+import java.util.*;
 import util.*;
 
-import org.javatuples.Pair;
+import static java.lang.String.format;
 
 /* This file has the implementation of the algorithm described in
 "The Tree-to-Tree Correction Problem" by Kuo-Chung Tai published
@@ -25,41 +21,41 @@ of these in the implementation below.
 */
 public class TreeDiff {
 
-	static int INFINITE = Integer.MAX_VALUE;
+	private static final int INFINITE = Integer.MAX_VALUE;
 
 	// Constant used for describing insertions or deletions
-	static String ALPHA = "alpha";
+	private static final Integer ALPHA = null;
 
 	/*
 	 * Returns the cost of transforming a to b
-	 * 
+	 *
 	 * @parameter a the label of the source node
-	 * 
+	 *
 	 * @parameter b the label of the target node
-	 * 
+	 *
 	 * @returns integer
 	 */
-	public static int r(Object a, Object b) {
-		if (a != ALPHA && b != ALPHA && ((TreeNode) a).label() == ((TreeNode) b).label()) // #
-																							// No
-																							// change
+	private static int r(Object a, Object b) {
+		if (a != ALPHA
+				&& b != ALPHA
+				&& Objects.equals(((TreeNode) a).label(), ((TreeNode) b).label())) // No change
 			return 0;
 		else // Insert, Delete, Change.
 			return 1;
 	}
 
-	public static String keyForE(int s, int u, int i, int t, int v, int j) {
-		return String.format("%d:%d:%d, %d:%d:%d", s, u, i, t, v, j);
+	private static String keyForE(int s, int u, int i, int t, int v, int j) {
+		return format("%d:%d:%d, %d:%d:%d", s, u, i, t, v, j);
 	}
 
 	/*
 	 * Returns the E mapping. Check the paper to understand what the mapping
 	 * mean.
-	 * 
+	 *
 	 * @parameter sourceTree the source tree (Tree)
-	 * 
+	 *
 	 * @parameter targetTree the target tree (Tree)
-	 * 
+	 *
 	 * @returns (dict, dict) The first dict is in the format {'i:j:k, p:q:r' =>
 	 * cost} where i, j, k, p, q, r are integers. The second dict is in the
 	 * format {'i:j:k, p:q:r' => mapping} where mapping is a list of (x, y)
@@ -67,65 +63,73 @@ public class TreeDiff {
 	 * mapped to which node at the preorder position y in the target tree. If x
 	 * is ALPHA, then it shows the node at the preorder position y in the target
 	 * tree is inserted. If y is ALPHA, then it shows the node at the preorder
-	 * position x in the souce tree is deleted.
+	 * position x in the source tree is deleted.
 	 */
-	public static Pair computeE(Tree sourceTree, Tree targetTree) {
-		Map<String, Integer> E = new HashMap<>();
-		Map<String, ArrayList<Pair<Object, Object>>> mappingForE = new HashMap<>();
+	private static Map<String, TreeMapping> computeE(Tree sourceTree, Tree targetTree) {
+		Map<String, TreeMapping> treeDiffMapE = new HashMap<>();
 
 		for (int i = 1; i < sourceTree.size() + 1; i++) {
 			for (int j = 1; j < targetTree.size() + 1; j++) {
-				for (Integer u : sourceTree.ancestor_iterator(i)) {
-					for (Integer s : sourceTree.ancestor_iterator(u)) {
-						for (Integer v : targetTree.ancestor_iterator(j)) {
-							for (Integer t : targetTree.ancestor_iterator(v)) {
+				for (Integer u : sourceTree.ancestorIterator(i)) {
+					for (Integer s : sourceTree.ancestorIterator(u)) {
+						for (Integer v : targetTree.ancestorIterator(j)) {
+							for (Integer t : targetTree.ancestorIterator(v)) {
 								String key = keyForE(s, u, i, t, v, j);
-								if ((s == u && u == i) && (t == v && v == j)) {
-									E.put(key, r(sourceTree.node_at(i), targetTree.node_at(j)));
 
-									ArrayList<Pair<Object, Object>> tempArr = new ArrayList<>();
-									tempArr.add(new Pair(i, j));
-									mappingForE.put(key, tempArr);
-								} else if ((s == u && u == i) || (t < v && v == j)) {
-									int f_j = targetTree.father_of(j).preorder_position();
+								if ((Objects.equals(s, u) && u == i) && (Objects.equals(t, v) && v == j)) {
+									Integer distance = r(sourceTree.nodeAt(i), targetTree.nodeAt(j));
+									Mapping mapping = new Mapping();
+									mapping.add(pairOf(i, j));
+									treeDiffMapE.put(key, new TreeMapping(distance, mapping));
+
+								} else if ((Objects.equals(s, u) && u == i) || (t < v && v == j)) {
+									int f_j = targetTree.fatherOf(j).preorderPosition();
 									String dependentKey = keyForE(s, u, i, t, f_j, j - 1);
+									TreeMapping dependentTreeMapping = treeDiffMapE.get(dependentKey);
+									final Integer distance = dependentTreeMapping.cost + r(ALPHA, targetTree.nodeAt(j));
+									Mapping mapping = new Mapping();
+									mapping.addAll(dependentTreeMapping.mapping);
+									mapping.add(pairOf(ALPHA, j));
+									treeDiffMapE.put(key, new TreeMapping(distance, mapping));
 
-									E.put(key, E.get(dependentKey) + r(ALPHA, targetTree.node_at(j)));
-
-									ArrayList<Pair<Object, Object>> tempArr = mappingForE.get(dependentKey);
-									tempArr.add(new Pair(ALPHA, j));
-									mappingForE.put(key, tempArr);
-								} else if ((s < u && u == i) || (t == v && v == j)) {
-									int f_i = sourceTree.father_of(i).preorder_position();
+								} else if ((s < u && u == i) || (Objects.equals(t, v) && v == j)) {
+									int f_i = sourceTree.fatherOf(i).preorderPosition();
 									String dependentKey = keyForE(s, f_i, i - 1, t, v, j);
+									TreeMapping dependentTreeMapping = treeDiffMapE.get(dependentKey);
+									final Integer distance = dependentTreeMapping.cost + r(sourceTree.nodeAt(i), ALPHA);
+									Mapping mapping = new Mapping();
+									mapping.addAll(dependentTreeMapping.mapping);
+									mapping.add(pairOf(i, ALPHA));
+									treeDiffMapE.put(key, new TreeMapping(distance, mapping));
 
-									E.put(key, E.get(dependentKey) + r(sourceTree.node_at(i), ALPHA));
-
-									ArrayList<Pair<Object, Object>> tempArr = mappingForE.get(dependentKey);
-									tempArr.add(new Pair(i, ALPHA));
-									mappingForE.put(key, tempArr);
 								} else {
-									TreeNode xNode = sourceTree.child_on_path_from_descendant(u, i);
-									int x = xNode.preorder_position();
-									TreeNode yNode = targetTree.child_on_path_from_descendant(v, j);
-									int y = yNode.preorder_position();
+									int x = sourceTree.childOnPathFromDescendant(u, i).preorderPosition();
+									int y = targetTree.childOnPathFromDescendant(v, j).preorderPosition();
 									String dependentKey1 = keyForE(s, x, i, t, v, j);
 									String dependentKey2 = keyForE(s, u, i, t, y, j);
 									String dependentKey3 = keyForE(s, u, x - 1, t, v, y - 1);
 									String dependentKey4 = keyForE(x, x, i, y, y, j);
 
-									E.put(key, Math.min(Math.min(E.get(dependentKey1), E.get(dependentKey2)),
-											(E.get(dependentKey3) + E.get(dependentKey4))));
+									TreeMapping dependentTreeMapping1 = treeDiffMapE.get(dependentKey1);
+									TreeMapping dependentTreeMapping2 = treeDiffMapE.get(dependentKey2);
+									TreeMapping dependentTreeMapping3 = treeDiffMapE.get(dependentKey3);
+									TreeMapping dependentTreeMapping4 = treeDiffMapE.get(dependentKey4);
+									final int distance = Math.min(
+											Math.min(dependentTreeMapping1.cost, dependentTreeMapping2.cost),
+											(dependentTreeMapping3.cost + dependentTreeMapping4.cost)
+									);
+
 									// Remember the mapping.
-									if (E.get(key) == E.get(dependentKey1)) {
-										mappingForE.put(key, mappingForE.get(dependentKey1));
-									} else if (E.get(key) == E.get(dependentKey2)) {
-										mappingForE.put(key, mappingForE.get(dependentKey2));
+									final Mapping mapping = new Mapping();
+									if (distance == dependentTreeMapping1.cost) {
+										mapping.addAll(dependentTreeMapping1.mapping);
+									} else if (distance == dependentTreeMapping2.cost) {
+										mapping.addAll(dependentTreeMapping2.mapping);
 									} else {
-										ArrayList<Pair<Object, Object>> tempArr = mappingForE.get(dependentKey3);
-										tempArr.addAll(mappingForE.get(dependentKey4));
-										mappingForE.put(key, tempArr);
+										mapping.addAll(dependentTreeMapping3.mapping);
+										mapping.addAll(dependentTreeMapping4.mapping);
 									}
+									treeDiffMapE.put(key, new TreeMapping(distance, mapping));
 								}
 							}
 						}
@@ -133,200 +137,238 @@ public class TreeDiff {
 				}
 			}
 		}
-		return new Pair(E, mappingForE);
+		return treeDiffMapE;
+	}
+
+	private static ImmutablePair<Integer, Integer> pairOf(final Integer i, final Integer j) {
+		return new ImmutablePair<>(i, j);
 	}
 
 	// Returns the key for MIN_M map
-	public static String keyForMIN_M(int s, int t) {
-		return String.format("%d:%d", s, t);
+	private static String keyForMIN_M(int s, int t) {
+		return format("%d:%d", s, t);
 	}
 
 	/*
 	 * Returns the MIN_M mapping. Check out the article to see what the mapping
-	 * mean
-	 * 
+	 * means
+	 *
 	 * @parameter E computed by computeE (dict)
-	 * 
+	 *
 	 * @parameter sourceTree the source tree (Tree)
-	 * 
+	 *
 	 * @parameter targetTree the target tree (Tree)
-	 * 
+	 *
 	 * @returns (dict, dict) The first dict is the MIN_M map (key to cost). The
 	 * second dict is (key to list of integer pairs) the transformation mapping
 	 * where a pair (x, y) shows which node at the preorder position x in the
 	 * source tree is mapped to which node at the preorder position y in the
 	 * target tree. If x is ALPHA, then it shows the node at the preorder
 	 * position y in the target tree is inserted. If y is ALPHA, then it shows
-	 * the node at the preorder position x in the souce tree is deleted.
+	 * the node at the preorder position x in the source tree is deleted.
 	 */
-	public static Pair computeMIN_M(Map<String, Integer> E, Map<String, ArrayList<Pair<Object, Object>>> mappingForE,
-			Tree sourceTree, Tree targetTree) {
-		Map<String, Integer> MIN_M = new HashMap<String, Integer>();
-		MIN_M.put(keyForMIN_M(1, 1), 0);
+	private static Map<String, TreeMapping> computeMIN_M(Tree sourceTree, Tree targetTree, Map<String, TreeMapping> treeDiffMapE) {
+		final Map<String, TreeMapping> treeDiffMapMinM = new HashMap<>();
 
-		Map<String, ArrayList<Pair<Object, Object>>> mappingForMinM = new HashMap<>();
-		ArrayList<Pair<Object, Object>> tempArr = new ArrayList<>();
-		tempArr.add(new Pair(1, 1));
-		mappingForMinM.put(keyForMIN_M(1, 1), tempArr);
+		String key = keyForMIN_M(1, 1);
+		Mapping mapping = new Mapping();
+		mapping.add(pairOf(1, 1));
+		treeDiffMapMinM.put(key, new TreeMapping(0, mapping));
 
 		// This part is missing in the paper
 		for (int j = 2; j < targetTree.size(); j++) {
-			MIN_M.put(keyForMIN_M(1, j), MIN_M.get(keyForMIN_M(1, j - 1)) + r(ALPHA, targetTree.node_at(j)));
+			String key_1_j = keyForMIN_M(1, j);
+			String key_1_j1 = keyForMIN_M(1, j - 1);
+			TreeMapping treeMapping_1_j1 = treeDiffMapMinM.get(key_1_j1);
+			int distance_1_j = treeMapping_1_j1.cost + r(ALPHA, targetTree.nodeAt(j));
 
-			tempArr = mappingForMinM.get(keyForMIN_M(1, j - 1));
-			tempArr.add(new Pair(ALPHA, j));
-			mappingForMinM.put(keyForMIN_M(1, j), tempArr);
+			final Mapping mapping_1_j = new Mapping();
+			mapping_1_j.addAll(treeMapping_1_j1.mapping);
+			mapping_1_j.add(pairOf(ALPHA, j));
+			treeDiffMapMinM.put(key_1_j, new TreeMapping(distance_1_j, mapping_1_j));
 		}
 
 		// This part is missing in the paper
 		for (int i = 2; i < sourceTree.size(); i++) {
-			MIN_M.put(keyForMIN_M(i, 1), MIN_M.get(keyForMIN_M(i - 1, 1)) + r(sourceTree.node_at(i), ALPHA));
+			String key_i_1 = keyForMIN_M(i, 1);
+			String key_i1_1 = keyForMIN_M(i - 1, 1);
+			TreeMapping treeMapping_i1_1 = treeDiffMapMinM.get(key_i1_1);
+			int distance_i_1 = treeMapping_i1_1.cost + r(sourceTree.nodeAt(i), ALPHA);
 
-			tempArr = mappingForMinM.get(keyForMIN_M(i - 1, 1));
-			tempArr.add(new Pair(i, ALPHA));
-			mappingForMinM.put(keyForMIN_M(i, 1), tempArr);
+			final Mapping mapping_i_1 = new Mapping();
+			mapping_i_1.addAll(treeMapping_i1_1.mapping);
+			mapping_i_1.add(pairOf(i, ALPHA));
+			treeDiffMapMinM.put(key_i_1, new TreeMapping(distance_i_1, mapping_i_1));
 		}
 		for (int i = 2; i < sourceTree.size() + 1; i++) {
 			for (int j = 2; j < targetTree.size() + 1; j++) {
-				String keyForMIN_M_i_j = keyForMIN_M(i, j);
-				MIN_M.put(keyForMIN_M_i_j, INFINITE);
-				int f_i = sourceTree.father_of(i).preorder_position();
-				int f_j = targetTree.father_of(j).preorder_position();
+				String key_i_j = keyForMIN_M(i, j);
+				int distance_i_j = INFINITE;
+				Mapping mapping_i_j = new Mapping();
+				int f_i = sourceTree.fatherOf(i).preorderPosition();
+				int f_j = targetTree.fatherOf(j).preorderPosition();
 
-				for (Integer s : sourceTree.ancestor_iterator(f_i)) {
-					for (Integer t : targetTree.ancestor_iterator(f_j)) {
+				for (Integer s : sourceTree.ancestorIterator(f_i)) {
+					for (Integer t : targetTree.ancestorIterator(f_j)) {
 						String dependentKeyForE = keyForE(s, f_i, i - 1, t, f_j, j - 1);
 						String dependentKeyForM = keyForMIN_M(s, t);
-						int temp = MIN_M.get(dependentKeyForM) + E.get(dependentKeyForE)
-								- r(sourceTree.node_at(s), targetTree.node_at(t));
-						MIN_M.put(keyForMIN_M_i_j, Math.min(temp, MIN_M.get(keyForMIN_M_i_j)));
-						if (temp == MIN_M.get(keyForMIN_M_i_j)) {
-							Set<Pair<Object, Object>> tempSet = new HashSet<>();
-							tempSet.addAll(mappingForMinM.get(dependentKeyForM));
-							tempSet.addAll(mappingForE.get(dependentKeyForE));
-							tempArr = new ArrayList<>();
-							tempArr.addAll(tempSet);
-							mappingForMinM.put(keyForMIN_M_i_j, tempArr);
+						TreeMapping dependentTreeMappingE = treeDiffMapE.get(dependentKeyForE);
+						TreeMapping dependentTreeMappingM = treeDiffMapMinM.get(dependentKeyForM);
+						int temp = dependentTreeMappingM.cost + dependentTreeMappingE.cost
+								- r(sourceTree.nodeAt(s), targetTree.nodeAt(t));
+						distance_i_j = Math.min(temp, distance_i_j);
+						if (temp == distance_i_j) {
+							Set<Pair<Integer, Integer>> tempSet = new HashSet<>();
+							tempSet.addAll(dependentTreeMappingM.mapping);
+							tempSet.addAll(dependentTreeMappingE.mapping);
+							mapping_i_j.addAll(tempSet);
 						}
 					}
 				}
-				MIN_M.put(keyForMIN_M_i_j,
-						MIN_M.get(keyForMIN_M_i_j) + r(sourceTree.node_at(i), targetTree.node_at(j)));
-
-				tempArr = mappingForMinM.get(keyForMIN_M_i_j);
-				tempArr.add(new Pair(i, j));
-				mappingForMinM.put(keyForMIN_M_i_j, tempArr);
+				distance_i_j = distance_i_j + r(sourceTree.nodeAt(i), targetTree.nodeAt(j));
+				mapping_i_j.add(pairOf(i, j));
+				treeDiffMapMinM.put(key_i_j, new TreeMapping(distance_i_j, mapping_i_j));
 			}
 		}
-		return new Pair(MIN_M, mappingForMinM);
+		return treeDiffMapMinM;
 	}
 
 	// Returns the key for D map
-	public static String keyForD(int i, int j) {
-		return String.format("%d, %d", i, j);
+	private static String keyForD(int i, int j) {
+		return format("%d, %d", i, j);
 	}
 
 	/*
-	 * Returns the D mapping. Check out the article to see what the mapping mean
-	 * 
+	 * Returns the D mapping. Check out the article to see what the mapping means
+	 *
 	 * @parameter sourceTree the source tree (Tree)
-	 * 
+	 *
 	 * @parameter targetTree the target tree (Tree)
-	 * 
+	 *
 	 * @parameter MIN_M the MIN_M map (dict)
-	 * 
+	 *
 	 * @parameter mappingForM the transformation details for MIN_M
-	 * 
+	 *
 	 * @returns (dict, dict) The first dict is the D mapping (key to cost). The
 	 * second dict is (key to list of integer pairs) the transformation mapping
 	 * where a pair (x, y) shows which node at the preorder position x in the
 	 * source tree is mapped to which node at the preorder position y in the
 	 * target tree. If x is ALPHA, then it shows the node at the preorder
 	 * position y in the target tree is inserted. If y is ALPHA, then it shows
-	 * the node at the preorder position x in the souce tree is deleted.
+	 * the node at the preorder position x in the source tree is deleted.
 	 */
-	public static Pair computeD(Tree sourceTree, Tree targetTree, Map<String, Integer> MIN_M,
-			Map<String, ArrayList<Pair<Object, Object>>> mappingForMinM) {
-		Map<String, Integer> D = new HashMap<>();
-		D.put(keyForD(1, 1), 0);
+	private static Map<String, TreeMapping> computeD(Tree sourceTree, Tree targetTree, Map<String, TreeMapping> treeDiffMapMinM) {
+		final Map<String, TreeMapping> treeDiffMapD = new HashMap<>();
 
-		Map<String, ArrayList<Pair<Object, Object>>> mappingForD = new HashMap<>();
-		ArrayList<Pair<Object, Object>> tempArr = new ArrayList<>();
-		tempArr.add(new Pair(1, 1));
-		mappingForD.put(keyForD(1, 1), tempArr);
+		String key = keyForD(1, 1);
+		Mapping mapping = new Mapping();
+		mapping.add(pairOf(1, 1));
+		treeDiffMapD.put(key, new TreeMapping(0, mapping));
 
 		for (int i = 2; i < sourceTree.size() + 1; i++) {
-			D.put(keyForD(i, 1), D.get(keyForD(i - 1, 1)) + r(sourceTree.node_at(i), ALPHA));
+			String key_i_1 = keyForD(i, 1);
+			String key_i1_1 = keyForD(i - 1, 1);
+			TreeMapping treeMapping_i1_1 = treeDiffMapD.get(key_i1_1);
+			int distance_i_1 = treeMapping_i1_1.cost + r(sourceTree.nodeAt(i), ALPHA);
 
-			tempArr = mappingForD.get(keyForD(i - 1, 1));
-			tempArr.add(new Pair(i, ALPHA));
-			mappingForD.put(keyForD(i, 1), tempArr);
+			Mapping mapping_i_1 = new Mapping();
+			mapping_i_1.addAll(treeMapping_i1_1.mapping);
+			mapping_i_1.add(pairOf(i, ALPHA));
+			treeDiffMapD.put(key_i_1, new TreeMapping(distance_i_1, mapping_i_1));
 		}
 		for (int j = 2; j < targetTree.size() + 1; j++) {
-			D.put(keyForD(1, j), D.get(keyForD(1, j - 1)) + r(ALPHA, sourceTree.node_at(j)));
+			String key_1_j = keyForD(1, j);
+			String key_1_j1 = keyForD(1, j - 1);
+			TreeMapping treeMapping_1_j1 = treeDiffMapD.get(key_1_j1);
+			int distance_1_j = treeMapping_1_j1.cost + r(ALPHA, sourceTree.nodeAt(j));
 
-			tempArr = mappingForD.get(keyForD(1, j - 1));
-			tempArr.add(new Pair(ALPHA, j));
-			mappingForD.put(keyForD(1, j), tempArr);
+			Mapping mapping_1_j = new Mapping();
+			mapping_1_j.addAll(treeMapping_1_j1.mapping);
+			mapping_1_j.add(pairOf(ALPHA, j));
+			treeDiffMapD.put(key_1_j, new TreeMapping(distance_1_j, mapping_1_j));
 		}
 		for (int i = 2; i < sourceTree.size() + 1; i++) {
 			for (int j = 2; j < targetTree.size() + 1; j++) {
-				int option1 = D.get(keyForD(i, j - 1)) + r(ALPHA, targetTree.node_at(j));
-				int option2 = D.get(keyForD(i - 1, j)) + r(sourceTree.node_at(i), ALPHA);
-				int option3 = MIN_M.get(keyForMIN_M(i, j));
-				D.put(keyForD(i, j), Math.min(option1, Math.min(option2, option3)));
+				String keyD_i_j1 = keyForD(i, j - 1);
+				TreeMapping treeMapping_i_j1 = treeDiffMapD.get(keyD_i_j1);
+				int option1 = treeMapping_i_j1.cost + r(ALPHA, targetTree.nodeAt(j));
 
-				if (D.get(keyForD(i, j)) == option1) {
-					tempArr = mappingForD.get(keyForD(i, j - 1));
-					tempArr.add(new Pair(ALPHA, j));
-					mappingForD.put(keyForD(i, j), tempArr);
-				} else if (D.get(keyForD(i, j)) == option2) {
-					tempArr = mappingForD.get(keyForD(i - 1, j));
-					tempArr.add(new Pair(i, ALPHA));
-					mappingForD.put(keyForD(i, j), tempArr);
+				String keyD_i1_j = keyForD(i - 1, j);
+				TreeMapping treeMapping_i1_j = treeDiffMapD.get(keyD_i1_j);
+				int option2 = treeMapping_i1_j.cost + r(sourceTree.nodeAt(i), ALPHA);
+
+				String keyM_i_j = keyForMIN_M(i, j);
+				TreeMapping treeMappingM_i_j = treeDiffMapMinM.get(keyM_i_j);
+				int option3 = treeMappingM_i_j.cost;
+
+				String keyD_i_j = keyForD(i, j);
+				int distance_i_j = Math.min(option1, Math.min(option2, option3));
+
+				Mapping mapping_i_j = new Mapping();
+				if (distance_i_j == option1) {
+					mapping_i_j.addAll(treeMapping_i_j1.mapping);
+					mapping_i_j.add(pairOf(ALPHA, j));
+				} else if (distance_i_j == option2) {
+					mapping_i_j.addAll(treeMapping_i1_j.mapping);
+					mapping_i_j.add(pairOf(i, ALPHA));
 				} else {
-					mappingForD.put(keyForD(i, j), mappingForMinM.get(keyForMIN_M(i, j)));
+					mapping_i_j.addAll(treeMappingM_i_j.mapping);
 				}
+
+				treeDiffMapD.put(keyD_i_j, new TreeMapping(distance_i_j, mapping_i_j));
 			}
 		}
-		return new Pair(D, mappingForD);
-
+		return treeDiffMapD;
 	}
 
 	/*
-	 * Produces a list of humand friendly descriptions for mapping between two
-	 * trees Example: ['No change for A (@1)', 'Change from B (@2) to C (@3)',
-	 * 'No change for D (@3)', 'Insert B (@2)']
-	 * 
+	 * Produces a list of human friendly descriptions for mapping between two trees
+	 * Example: [
+	 *   'No change for A (@1)',
+	 *   'Change from B (@2) to C (@3)',
+	 *   'No change for D (@3)',
+	 *   'Insert B (@2)'
+	 * ]
+	 *
 	 * @returns list of strings
 	 */
-	public static ArrayList<String> produceHumanFriendlyMapping(ArrayList<Pair<Object, Object>> mapping,
-			Tree sourceTree, Tree targetTree) {
-		ArrayList<String> humandFriendlyMapping = new ArrayList<>();
+	public static List<String> produceHumanFriendlyMapping(Mapping mapping, Tree sourceTree, Tree targetTree) {
+		List<String> humanFriendlyMapping = new ArrayList<>();
 		for (Pair pair : mapping) {
-			Object i = pair.getValue0();
-			Object j = pair.getValue1();
+			Object i = pair.getLeft();
+			Object j = pair.getRight();
 			if (i == ALPHA) {
-				TreeNode targetNode = targetTree.node_at((int) j);
-				humandFriendlyMapping
-						.add(String.format("Insert %s (@%d)", targetNode.label(), targetNode.preorder_position()));
+				TreeNode targetNode = targetTree.nodeAt((int) j);
+				humanFriendlyMapping.add(format("Insert %s (@%d)",
+						targetNode.label(),
+						targetNode.preorderPosition()
+				));
 			} else if (j == ALPHA) {
-				TreeNode sourceNode = sourceTree.node_at((int) i);
-				humandFriendlyMapping
-						.add(String.format("Delete %s (@%d)", sourceNode.label(), sourceNode.preorder_position()));
+				TreeNode sourceNode = sourceTree.nodeAt((int) i);
+				humanFriendlyMapping.add(format("Delete %s (@%d)",
+						sourceNode.label(),
+						sourceNode.preorderPosition()
+				));
 			} else {
-				TreeNode sourceNode = sourceTree.node_at((int) i);
-				TreeNode targetNode = targetTree.node_at((int) j);
-				if (sourceNode.label() == targetNode.label()) {
-					humandFriendlyMapping.add(String.format("No change for %s (@%d and @%d)", sourceNode.label(),
-							sourceNode.preorder_position(), targetNode.preorder_position()));
+				TreeNode sourceNode = sourceTree.nodeAt((int) i);
+				TreeNode targetNode = targetTree.nodeAt((int) j);
+				if (Objects.equals(sourceNode.label(), targetNode.label())) {
+					humanFriendlyMapping.add(format("No change for %s (@%d and @%d)",
+							sourceNode.label(),
+							sourceNode.preorderPosition(),
+							targetNode.preorderPosition()
+					));
 				} else {
-					humandFriendlyMapping.add(String.format("Change from %s (@%d) to %s @%d)", sourceNode.label(),
-							sourceNode.preorder_position(), targetNode.label(), targetNode.preorder_position()));
+					humanFriendlyMapping.add(format("Change from %s (@%d) to %s (@%d)",
+							sourceNode.label(),
+							sourceNode.preorderPosition(),
+							targetNode.label(),
+							targetNode.preorderPosition()
+					));
 				}
 			}
 		}
-		return humandFriendlyMapping;
+		return humanFriendlyMapping;
 	}
 
 	/*
@@ -335,58 +377,59 @@ public class TreeDiff {
 	 * source tree is mapped to which node at the preorder position y in the
 	 * target tree. If x is ALPHA, then it shows the node at the preorder
 	 * position y in the target tree is inserted. If y is ALPHA, then it shows
-	 * the node at the preorder position x in the souce tree is deleted.
-	 * 
+	 * the node at the preorder position x in the source tree is deleted.
+	 *
 	 * @parameter sourceTree the source tree (Tree)
-	 * 
+	 *
 	 * @parameter targetTree the target tree (Tree)
-	 * 
+	 *
 	 * @returns (int, [(int, int)])
 	 */
-	public static Pair computeDiff(Tree sourceTree, Tree targetTree) {
-		Pair<Object, Object> pair = computeE(sourceTree, targetTree);
-		Map<String, Integer> E = (Map<String, Integer>) pair.getValue0();
-		Map<String, ArrayList<Pair<Object, Object>>> mappingForE = (Map<String, ArrayList<Pair<Object, Object>>>) pair
-				.getValue1();
+	public static TreeMapping computeDiff(Tree sourceTree, Tree targetTree) {
+		Map<String, TreeMapping> treeDiffMapE = computeE(sourceTree, targetTree);
+		Map<String, TreeMapping> treeDiffMapMinM = computeMIN_M(sourceTree, targetTree, treeDiffMapE);
+		Map<String, TreeMapping> treeDiffMapD = computeD(sourceTree, targetTree, treeDiffMapMinM);
 
-		pair = computeMIN_M(E, mappingForE, sourceTree, targetTree);
-		Map<String, Integer> MIN_M = (Map<String, Integer>) pair.getValue0();
-		Map<String, ArrayList<Pair<Object, Object>>> mappingForMinM = (Map<String, ArrayList<Pair<Object, Object>>>) pair
-				.getValue1();
+		String key = keyForD(sourceTree.size(), targetTree.size());
+		TreeMapping treeMapping = treeDiffMapD.get(key);
+		treeMapping.mapping.sort(MAPPING_PAIR_COMPARATOR);
 
-		pair = computeD(sourceTree, targetTree, MIN_M, mappingForMinM);
-		Map<String, Integer> D = (Map<String, Integer>) pair.getValue0();
-		Map<String, ArrayList<Pair<Object, Object>>> mappingForD = (Map<String, ArrayList<Pair<Object, Object>>>) pair
-				.getValue1();
-
-		ArrayList<Pair<Object, Object>> mapping = mappingForD.get(keyForD(sourceTree.size(), targetTree.size()));
-		Collections.sort(mapping, new Comparator<Pair<Object, Object>>() {
-			@Override
-			public int compare(Pair<Object, Object> p1, Pair<Object, Object> p2) {
-				if (compareHelper(p1.getValue0(), p2.getValue0()) == 1) {
-					return 1;
-				} else if (compareHelper(p1.getValue0(), p2.getValue0()) == -1) {
-					return -1;
-				} else {
-					return compareHelper(p1.getValue1(), p2.getValue1());
-				}
-			};
-
-			public int compareHelper(Object o1, Object o2) {
-				if (o1 instanceof String) {
-					return 1;
-				} else if (o2 instanceof String) {
-					return -1;
-				} else if ((int) o1 > (int) o2) {// if they are integer
-					return 1;
-				} else if ((int) o1 < (int) o2) {
-					return -1;
-				} else {
-					return 0;
-				}
-			};
-		});
-
-		return new Pair(D.get(keyForD(sourceTree.size(), targetTree.size())), mapping);
+		return treeMapping;
 	}
+
+	private static final Comparator<Pair<Integer, Integer>> MAPPING_PAIR_COMPARATOR = new Comparator<Pair<Integer, Integer>>() {
+		@Override
+		public int compare(Pair<Integer, Integer> p1, Pair<Integer, Integer> p2) {
+			if (compareHelper(p1.getLeft(), p2.getLeft()) == 1) {
+				return 1;
+			} else if (compareHelper(p1.getLeft(), p2.getLeft()) == -1) {
+				return -1;
+			} else {
+				return compareHelper(p1.getRight(), p2.getRight());
+			}
+		}
+
+		int compareHelper(Object o1, Object o2) {
+			if (o1 == ALPHA) {
+				return 1;
+			} else // if they are integer
+				if (o2 == ALPHA) {
+					return -1;
+				} else return Integer.compare((int) o1, (int) o2);
+		}
+	};
+
+	static class TreeMapping {
+		public final int cost;
+		public final Mapping mapping;
+
+		TreeMapping(Integer cost, Mapping mapping) {
+			this.cost = cost;
+			this.mapping = mapping;
+		}
+	}
+
+	static class Mapping extends ArrayList<Pair<Integer, Integer>> {
+	}
+
 }
